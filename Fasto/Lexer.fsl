@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////
-// TODO: project task 1 
+// TODO: project task 1 (DONE)
 //   implement lexer tokens for the new operators: 
 //   multiplication (*), division (/), numerical negation (~), 
 //   logical negation (not), logical and (&&), logical or (||),
@@ -126,7 +126,7 @@ rule Token = parse
   | '~'                   { Parser.NEGATE (getPos lexbuf)}  
   | "&&"                  { Parser.AND (getPos lexbuf)}
   | "||"                  { Parser.OR (getPos lexbuf)}
-  | ';'                   { Parser.SEMICOLON (getPos lexbuf) }
+  | ';'                   { Parser.SEMICOLON (getPos lexbuf)}
 
 
  
