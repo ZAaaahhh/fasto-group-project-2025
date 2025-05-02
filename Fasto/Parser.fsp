@@ -25,7 +25,7 @@ let parse_error_rich =
 //   TODO: project task 1 :
 //     - multiplication (*), division (/), numerical negation (~), 
 //       logical negation (not), logical and (&&), logical or (||),
-//       boolean literals (true, false)
+//       boolean literals (true, false) (DONE)
 //     - add the required precedence and associativity rules for
 //       *, /, ~, not, &&, ||
 //     - generalize the syntax of let-expressions to allow
@@ -40,10 +40,20 @@ let parse_error_rich =
 %token <int * Position> NUM
 %token <char * Position> CHARLIT
 %token <string * Position> ID STRINGLIT
+
 //keywords
 %token <Position> BOOL CHAR ELSE FN FUN IF IN INT LET THEN TRUE
+%token <Position> PLUS MINUS TIMES DIVIDE
+%token <Position> NEGATE AND OR
+%token <Position> TRUE FALSE NOT
+%token <Position> DEQ LTH 
+%token <Position> EQ ARROW LPAR RPAR LBRACKET RBRACKET
+%token <Position> LCURLY RCURLY EOF
+
+
 //specials
 %token <Position> IOTA LENGTH MAP READ REDUCE WRITE
+
 //symbols
 %token <Position> MINUS PLUS DEQ LTH
 %token <Position> COMMA SEMICOLON EQ ARROW LPAR RPAR LBRACKET RBRACKET
@@ -61,6 +71,7 @@ let parse_error_rich =
 %type <AbSyn.UntypedExp> Exp
 %type <AbSyn.UntypedExp list> Exps
 %type <AbSyn.UntypedFunArg> FunArg
+
 // TODO: Task 1(b): add any new nonterminals here
 
 %%
