@@ -6,7 +6,7 @@
 //   boolean literals (true, false), semicolon (;)
 //
 //
-// TODO: project task 2 
+// TODO: project task 2 (DONE)
 //   implement lexer tokens (keywords) for replicate, filter, scan 
 //
 //
@@ -76,6 +76,9 @@ let keyword (s, pos) =
        | "reduce"       -> Parser.REDUCE pos
        | "read"         -> Parser.READ pos
        | "write"        -> Parser.WRITE pos
+       | "replicate"    -> Parser.REPLICATE pos
+       | "filter"       -> Parser.FILTER pos
+       | "scan"         -> Parser.SCAN pos
        | _              -> Parser.ID (s, pos)
 }
 
@@ -120,13 +123,13 @@ rule Token = parse
   | '}'                   { Parser.RCURLY (getPos lexbuf) }
   | ','                   { Parser.COMMA  (getPos lexbuf) }
   | eof                   { Parser.EOF    (getPos lexbuf) }
-  | _                     { lexerError lexbuf "Illegal symbol in input" }
   | '*'                   { Parser.TIMES (getPos lexbuf)}
   | '/'                   { Parser.DIVIDE (getPos lexbuf)}
   | '~'                   { Parser.NEGATE (getPos lexbuf)}  
   | "&&"                  { Parser.AND (getPos lexbuf)}
   | "||"                  { Parser.OR (getPos lexbuf)}
   | ';'                   { Parser.SEMICOLON (getPos lexbuf)}
+  | _                     { lexerError lexbuf "Illegal symbol in input" }
 
 
  
