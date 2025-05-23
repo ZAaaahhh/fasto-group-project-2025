@@ -567,61 +567,117 @@ let rec compileExp  (e      : TypedExp)
          ; LABEL loop_end
          ]
 
-  (* TODO project task 2:
-        `replicate (n, a)`
-        `filter (f, arr)`
-        `scan (f, ne, arr)`
-     Look in `AbSyn.fs` for the shape of expression constructors
-        `Replicate`, `Filter`, `Scan`.
-     General Hint: write down on a piece of paper the C-like pseudocode
-        for implementing them, then translate that to RiscV pseudocode.
-     To allocate heap space for an array you may use `dynalloc` defined
-        above. For example, if `sz_reg` is a register containing an integer `n`,
-        and `ret_type` is the element-type of the to-be-allocated array, then
-        `dynalloc (sz_reg, arr_reg, ret_type)` will alocate enough space for
-        an n-element array of element-type `ret_type` (including the first
-        word that holds the length, and the necessary allignment padding), and
-        will place in register `arr_reg` the start address of the new array.
-        Since you need to allocate space for the result arrays of `Replicate`,
-        `Map` and `Scan`, then `arr_reg` should probably be `place` ...
+  | Replicate (en, ev, _, pos) ->
+    let arr = newName "rep"
+    let idx = newName "i"
+    let len = cExpr en vtab
+    let elem = cExpr ev vtab
+    [
+        len
+        sprintf "mov rdi, %s" (placeOf len)
+        sprintf "call alloc_array"
+        sprintf "mov %s, rax" arr
+        sprintf "mov %s, 0" idx
+        Label (newLabel "rep_loop_start")
+        sprintf "cmp %s, %s" idx (placeOf len)
+        sprintf "jge %s" (newLabel "rep_loop_end")
+        elem
+        sprintf "mov rdi, %s" arr
+        sprintf "mov rsi, %s" idx
+        sprintf "mov rdx, %s" (placeOf elem)
+        "call write_array"
+        sprintf "inc %s" idx
+        sprintf "jmp %s" (newLabel "rep_loop_start")
+        Label (newLabel "rep_loop_end")
+        sprintf "mov %s, %s" (placeOf res) arr
+    ]
 
-     `replicate(n,a)`: You should allocate a new (result) array, and execute a
-        loop of count `n`, in which you store the value hold into the register
-        corresponding to `a` into each memory location corresponding to an
-        element of the result array.
-        If `n` is less than `0` then remember to terminate the program with
-        an error -- see implementation of `iota`.
-  *)
-  | Replicate (_, _, _, _) ->
-      failwith "Unimplemented code generation of replicate"
 
-  (* TODO project task 2: see also the comment to replicate.
-     (a) `filter(f, arr)`:  has some similarity with the implementation of map.
-     (b) Use `applyFunArg` to call `f(a)` in a loop, for every element `a` of `arr`.
-     (c) If `f(a)` succeeds (result in the `true` value) then (and only then):
-          - set the next element of the result array to `a`, and
-          - increment a counter (initialized before the loop)
-     (d) It is useful to maintain two array iterators: one for the input array `arr`
-         and one for the result array. (The latter increases slower because
-         some of the elements of the input array are skipped because they fail
-         under the predicate).
-     (e) The last step (after the loop writing the elments of the result array)
-         is to update the logical size of the result array to the value of the
-         counter computed in step (c). You do this of course with a
-         `SW(counter_reg, place, 0)` instruction.
-  *)
-  | Filter (_, _, _, _) ->
-      failwith "Unimplemented code generation of filter"
 
-  (* TODO project task 2: see also the comment to replicate.
-     `scan(f, ne, arr)`: you can inspire yourself from the implementation of
-        `reduce`, but in the case of `scan` you will need to also maintain
-        an iterator through the result array, and write the accumulator in
-        the current location of the result iterator at every iteration of
-        the loop.
-  *)
-  | Scan (_, _, _, _, _) ->
-      failwith "Unimplemented code generation of scan"
+  | Filter (farg, arr, _, pos) ->
+    let arrVal = newName "arr"
+    let idx = newName "i"
+    let outIdx = newName "oi"
+    let len = newName "len"
+    let outArr = newName "out"
+    let x = newName "x"
+    [
+        cExpr arr vtab
+        sprintf "mov %s, %s" arrVal (placeOf arr)
+        sprintf "mov rdi, %s" arrVal
+        "call length_array"
+        sprintf "mov %s, rax" len
+        sprintf "mov rdi, %s" len
+        "call alloc_array"
+        sprintf "mov %s, rax" outArr
+        sprintf "mov %s, 0" idx
+        sprintf "mov %s, 0" outIdx
+        Label (newLabel "filter_loop_start")
+        sprintf "cmp %s, %s" idx len
+        sprintf "jge %s" (newLabel "filter_loop_end")
+        sprintf "mov rdi, %s" arrVal
+        sprintf "mov rsi, %s" idx
+        "call read_array"
+        sprintf "mov %s, rax" x
+        callFunArg farg [x]
+        "cmp rax, 0"
+        sprintf "je %s" (newLabel "skip_write")
+        sprintf "mov rdi, %s" outArr
+        sprintf "mov rsi, %s" outIdx
+        sprintf "mov rdx, %s" x
+        "call write_array"
+        sprintf "inc %s" outIdx
+        Label (newLabel "skip_write")
+        sprintf "inc %s" idx
+        sprintf "jmp %s" (newLabel "filter_loop_start")
+        Label (newLabel "filter_loop_end")
+        sprintf "mov %s, %s" (placeOf res) outArr
+    ]
+
+
+
+  | Scan (farg, e0, arr, _, pos) ->
+    let arrVal = newName "arr"
+    let len = newName "len"
+    let outArr = newName "out"
+    let idx = newName "i"
+    let acc = newName "acc"
+    let x = newName "x"
+    [
+        cExpr arr vtab
+        sprintf "mov %s, %s" arrVal (placeOf arr)
+        sprintf "mov rdi, %s" arrVal
+        "call length_array"
+        sprintf "mov %s, rax" len
+        sprintf "mov rdi, %s" len
+        "call alloc_array"
+        sprintf "mov %s, rax" outArr
+        cExpr e0 vtab
+        sprintf "mov %s, %s" acc (placeOf e0)
+        sprintf "mov rdi, %s" outArr
+        "mov rsi, 0"
+        sprintf "mov rdx, %s" acc
+        "call write_array"
+        sprintf "mov %s, 1" idx
+        Label (newLabel "scan_loop_start")
+        sprintf "cmp %s, %s" idx len
+        sprintf "jge %s" (newLabel "scan_loop_end")
+        sprintf "mov rdi, %s" arrVal
+        sprintf "mov rsi, %s" idx
+        "call read_array"
+        sprintf "mov %s, rax" x
+        callFunArg farg [acc; x]
+        sprintf "mov %s, rax" acc
+        sprintf "mov rdi, %s" outArr
+        sprintf "mov rsi, %s" idx
+        sprintf "mov rdx, %s" acc
+        "call write_array"
+        sprintf "inc %s" idx
+        sprintf "jmp %s" (newLabel "scan_loop_start")
+        Label (newLabel "scan_loop_end")
+        sprintf "mov %s, %s" (placeOf res) outArr
+    ]
+
 
 and applyFunArg ( ff     : TypedFunArg
                 , args   : reg list

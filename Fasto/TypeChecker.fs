@@ -125,10 +125,7 @@ and checkExp  (ftab : FunTable)
         let (e1_dec, e2_dec) = checkBinOp ftab vtab (pos, Int, e1, e2)
         (Int, Minus (e1_dec, e2_dec, pos))
 
-    (* TODO project task 1:
-        Implement by pattern matching Plus/Minus above.
-        See `AbSyn.fs` for the expression constructors of `Times`, ...
-    *)
+   
     | Times (e1, e2, pos) ->
         let t1 = typExp (e1, vtab, ftab)
         let t2 = typExp (e2, vtab, ftab)
@@ -305,39 +302,30 @@ and checkExp  (ftab : FunTable)
                                f_argres_type e_type pos
         (f_argres_type, Reduce (f', e_dec, arr_dec, elem_type, pos))
 
-    (* TODO project task 2:
-        See `AbSyn.fs` for the expression constructors of
-        `Replicate`, `Filter`, `Scan`.
+   
+    | Replicate (en, ev, t, pos) ->
+      checkType Int en
+      checkType t ev
+      Array (t, UnknownSize)
 
-        Hints for `replicate(n, a)`:
-        - recursively type check `n` and `a`
-        - check that `n` has integer type
-        - assuming `a` is of type `t` the result type
-          of replicate is `[t]`
-    *)
-    | Replicate (_, _, _, _) ->
-        failwith "Unimplemented type check of replicate"
+    | Filter (farg, arr, t, pos) ->
+      let tArr = checkExp arr
+      match tArr with
+     | Array (tElem, _) ->
+        checkFunArg farg [tElem] Bool
+        Array (tElem, UnknownSize)
+      | _ -> failwith "filter: expected array"
 
-    (* TODO project task 2: Hint for `filter(f, arr)`
-        Look into the type-checking lecture slides for the type rule of `map`
-        and think of what needs to be changed for filter (?)
-        Use `checkFunArg` to get the signature of the function argument `f`.
-        Check that:
-            - `f` has type `ta -> Bool`
-            - `arr` should be of type `[ta]`
-            - the result of filter should have type `[ta]`
-    *)
-    | Filter (_, _, _, _) ->
-        failwith "Unimplemented type check of filter"
+       
+    | Scan (farg e0, arr, t, pos) ->
+      let t0 = checkExp e0
+      let tArr = checkExp arr
+     match tArr with
+     | Array (tElem, _) ->
+        checkFunArg farg [t0; tElem] t0
+        Array (t0, UnknownSize)
+      | _ -> failwith "scan: expected array"
 
-    (* TODO project task 2: `scan(f, ne, arr)`
-        Hint: Implementation is very similar to `reduce(f, ne, arr)`.
-              (The difference between `scan` and `reduce` is that
-              scan's return type is the same as the type of `arr`,
-              while reduce's return type is that of an element of `arr`).
-    *)
-    | Scan (_, _, _, _, _) ->
-        failwith "Unimplemented type check of scan"
 
 and checkFunArg  (ftab : FunTable)
                  (vtab : VarTable)
