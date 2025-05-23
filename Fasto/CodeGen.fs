@@ -170,8 +170,8 @@ let rec compileExp  (e      : TypedExp)
       [ LI (place, n) ] (* assembler will generate appropriate
                            instruction sequence for any value n *)
   | Constant (BoolVal p, _) ->
-      (* TODO project task 1: represent `true`/`false` values as `1`/`0` *)
-      failwith "Unimplemented code generation for boolean constants"
+      [ LI (place, if p then 1 else 0) ]
+
   | Constant (CharVal c, pos) ->
       [ LI (place, int c) ]
 
@@ -240,37 +240,43 @@ let rec compileExp  (e      : TypedExp)
      version, but remember to come back and clean it up later.
      `Not` and `Negate` are simpler; you can use `XORI` for `Not`
   *)
-  | Times (e1, e2, pos) ->
-      let (c1, r1) = codeGenExp (e1, vtab, ftab)
-      let (c2, r2) = codeGenExp (e2, vtab, ftab)
-      let dest = newTemp()
-      (c1 @ c2 @ [sprintf "mul %s, %s, %s" dest r1 r2], dest)
+  | Times (e1, e2, _) ->
+      let t1 = newReg "times_L"
+      let t2 = newReg "times_R"
+      let code1 = compileExp e1 vtable t1
+      let code2 = compileExp e2 vtable t2
+      code1 @ code2 @ [MUL (place, t1, t2)]
+
 
   | Divide (e1, e2, pos) ->
-      let (c1 r1) = codeGenExp (e1, vtab, ftab)
-      let (c2, r2) = codeGenExp (e2, vtab, ftab)
-      let errLbl = newLabel "dividebyzero"
-      let endLbl = newLabel "divideok"
-      let dest = newTemp ()
-      (c1 @ c2 @ [
-        sprintf "beqz %s, %s" r2 errLbl
-        sprintf "divide %s, %s, %s" dest r1 r2;
-        sprintf "j %s" endLbl;
-        sprintf "%s" errLbl;
-        "li a0, 4"; // fejl kode
-        "j error";
-        sprintf "%s:" endLbl
-      ], dest)
+    let t1 = newReg "div_L"
+    let t2 = newReg "div_R"
+    let code1 = compileExp e1 vtable t1
+    let code2 = compileExp e2 vtable t2
+    let safe_label = newLab "div_safe"
+    let err_label = newLab "div_err"
+    code1 @ code2 @
+    [ BEQ (t2, Rzero, err_label)
+    ; LABEL safe_label
+    ; DIV (place, t1, t2)
+    ; J (newLab "div_end")
+    ; LABEL err_label
+    ; LI (Ra0, snd pos)
+    ; LA (Ra1, "m.DivZero")
+    ; J "p.RuntimeError"
+    ]
 
-  | Not (e, pos) ->
-      let (c, r) = codeGenExp (e, vtab, ftab)
-      let dest = newTemp()
-      (c @ [sprintf "xori %s, %s, 1" dest r], dest)
+  | Not (e, _) ->
+    let t = newReg "not_tmp"
+    let code = compileExp e vtable t
+    code @ [XORI (place, t, 1)]
 
-  | Negate (e, pos) ->
-      let (c, r) = codeGenExp (e, vtab, ftab)
-      let dest = newTemp()
-      (c @ [sprintf "neg %s, %s" dest r], dest)
+
+  | Negate (e, _) ->
+    let t = newReg "neg_tmp"
+    let code = compileExp e vtable t
+    code @ [SUB (place, Rzero, t)]
+
 
   | Let (dec, e1, pos) ->
       let (code1, vtable1) = compileDec dec vtable
@@ -361,40 +367,41 @@ let rec compileExp  (e      : TypedExp)
         in `e1 || e2` if the execution of `e1` will evaluate to `true` then
         the code of `e2` must not be executed. Similarly for `And` (&&).
   *)
-  | And (e1, e2, pos) ->
-      let (c1, r1) = codeGenExp (e1, vtab, ftab)
-      let (c2, r2) = codeGenExp (e2, vtab, ftab)
-      let dest = newTemp()
-      let lblFalse = newLabel "and_false"
-      let lblEnd = newLabel "and_end"
-      (c1 @ [
-          sprintf "beqz %s, %s" r1 lblFalse 
-      ] @ c2 @ [
-          sprintf "and %s, %s, %s" dest r1 r2;
-          sprintf "j %s" lblEnd;
-          sprintf "%s:" lblFalse;
-          sprintf "li %s, 0" dest;
-          sprintf "%s" lblEnd
-      ], dest)
+  | And (e1, e2, _) ->
+      let t1 = newReg "and_left"
+      let t2 = newReg "and_right"
+      let falseLabel = newLab "and_false"
+      let endLabel = newLab "and_end"
+      let code1 = compileExp e1 vtable t1
+      let code2 = compileExp e2 vtable t2
+      code1 @
+        [ BEQ (t1, Rzero, falseLabel) ] @
+        code2 @
+        [ BEQ (t2, Rzero, falseLabel)
+        ; LI (place, 1)
+        ; J endLabel
+        ; LABEL falseLabel
+        ; LI (place, 0)
+        ; LABEL endLabel ]
 
-  | Or (e1, e2, pos) ->
-      let (c1, r1) = codeGenExp (e1, vtab, ftab)
-      let (c2, r2) = codeGenExp (e2, vtab, ftab)
-      let dest = newTemp()
-      let lblTrue = newLabel "or_true"
-      let lblEnd = newLabel "or_end"
-      (c1 @  [
-          sprintf "bnez %s, %s" r1 lblTrue
-      ] @ c2 @ [
-          sprintf "or %s, %s, %s" dest r1 r2;
-          sprintf "j %s" lblEnd;
-          sprintf "%s:" lblTrue;
-          sprintf "li %s, 1" dest;
-          sprintf "%s:" lblEnd
-      ], dest)
 
-  | BoolConst true -> ([], "1")
-  | BoolConst false -> ([], "0")
+  | Or (e1, e2, _) ->
+    let t1 = newReg "or_left"
+    let t2 = newReg "or_right"
+    let trueLabel = newLab "or_true"
+    let endLabel = newLab "or_end"
+    let code1 = compileExp e1 vtable t1
+    let code2 = compileExp e2 vtable t2
+    code1 @
+      [ BNE (t1, Rzero, trueLabel) ] @
+      code2 @
+      [ BNE (t2, Rzero, trueLabel)
+      ; LI (place, 0)
+      ; J endLabel
+      ; LABEL trueLabel
+      ; LI (place, 1)
+      ; LABEL endLabel ]
+
 
   (* Indexing:
      1. generate code to compute the index
@@ -567,117 +574,61 @@ let rec compileExp  (e      : TypedExp)
          ; LABEL loop_end
          ]
 
-  | Replicate (en, ev, _, pos) ->
-    let arr = newName "rep"
-    let idx = newName "i"
-    let len = cExpr en vtab
-    let elem = cExpr ev vtab
-    [
-        len
-        sprintf "mov rdi, %s" (placeOf len)
-        sprintf "call alloc_array"
-        sprintf "mov %s, rax" arr
-        sprintf "mov %s, 0" idx
-        Label (newLabel "rep_loop_start")
-        sprintf "cmp %s, %s" idx (placeOf len)
-        sprintf "jge %s" (newLabel "rep_loop_end")
-        elem
-        sprintf "mov rdi, %s" arr
-        sprintf "mov rsi, %s" idx
-        sprintf "mov rdx, %s" (placeOf elem)
-        "call write_array"
-        sprintf "inc %s" idx
-        sprintf "jmp %s" (newLabel "rep_loop_start")
-        Label (newLabel "rep_loop_end")
-        sprintf "mov %s, %s" (placeOf res) arr
-    ]
+  (* TODO project task 2:
+        `replicate (n, a)`
+        `filter (f, arr)`
+        `scan (f, ne, arr)`
+     Look in `AbSyn.fs` for the shape of expression constructors
+        `Replicate`, `Filter`, `Scan`.
+     General Hint: write down on a piece of paper the C-like pseudocode
+        for implementing them, then translate that to RiscV pseudocode.
+     To allocate heap space for an array you may use `dynalloc` defined
+        above. For example, if `sz_reg` is a register containing an integer `n`,
+        and `ret_type` is the element-type of the to-be-allocated array, then
+        `dynalloc (sz_reg, arr_reg, ret_type)` will alocate enough space for
+        an n-element array of element-type `ret_type` (including the first
+        word that holds the length, and the necessary allignment padding), and
+        will place in register `arr_reg` the start address of the new array.
+        Since you need to allocate space for the result arrays of `Replicate`,
+        `Map` and `Scan`, then `arr_reg` should probably be `place` ...
 
+     `replicate(n,a)`: You should allocate a new (result) array, and execute a
+        loop of count `n`, in which you store the value hold into the register
+        corresponding to `a` into each memory location corresponding to an
+        element of the result array.
+        If `n` is less than `0` then remember to terminate the program with
+        an error -- see implementation of `iota`.
+  *)
+  | Replicate (_, _, _, _) ->
+      failwith "Unimplemented code generation of replicate"
 
+  (* TODO project task 2: see also the comment to replicate.
+     (a) `filter(f, arr)`:  has some similarity with the implementation of map.
+     (b) Use `applyFunArg` to call `f(a)` in a loop, for every element `a` of `arr`.
+     (c) If `f(a)` succeeds (result in the `true` value) then (and only then):
+          - set the next element of the result array to `a`, and
+          - increment a counter (initialized before the loop)
+     (d) It is useful to maintain two array iterators: one for the input array `arr`
+         and one for the result array. (The latter increases slower because
+         some of the elements of the input array are skipped because they fail
+         under the predicate).
+     (e) The last step (after the loop writing the elments of the result array)
+         is to update the logical size of the result array to the value of the
+         counter computed in step (c). You do this of course with a
+         `SW(counter_reg, place, 0)` instruction.
+  *)
+  | Filter (_, _, _, _) ->
+      failwith "Unimplemented code generation of filter"
 
-  | Filter (farg, arr, _, pos) ->
-    let arrVal = newName "arr"
-    let idx = newName "i"
-    let outIdx = newName "oi"
-    let len = newName "len"
-    let outArr = newName "out"
-    let x = newName "x"
-    [
-        cExpr arr vtab
-        sprintf "mov %s, %s" arrVal (placeOf arr)
-        sprintf "mov rdi, %s" arrVal
-        "call length_array"
-        sprintf "mov %s, rax" len
-        sprintf "mov rdi, %s" len
-        "call alloc_array"
-        sprintf "mov %s, rax" outArr
-        sprintf "mov %s, 0" idx
-        sprintf "mov %s, 0" outIdx
-        Label (newLabel "filter_loop_start")
-        sprintf "cmp %s, %s" idx len
-        sprintf "jge %s" (newLabel "filter_loop_end")
-        sprintf "mov rdi, %s" arrVal
-        sprintf "mov rsi, %s" idx
-        "call read_array"
-        sprintf "mov %s, rax" x
-        callFunArg farg [x]
-        "cmp rax, 0"
-        sprintf "je %s" (newLabel "skip_write")
-        sprintf "mov rdi, %s" outArr
-        sprintf "mov rsi, %s" outIdx
-        sprintf "mov rdx, %s" x
-        "call write_array"
-        sprintf "inc %s" outIdx
-        Label (newLabel "skip_write")
-        sprintf "inc %s" idx
-        sprintf "jmp %s" (newLabel "filter_loop_start")
-        Label (newLabel "filter_loop_end")
-        sprintf "mov %s, %s" (placeOf res) outArr
-    ]
-
-
-
-  | Scan (farg, e0, arr, _, pos) ->
-    let arrVal = newName "arr"
-    let len = newName "len"
-    let outArr = newName "out"
-    let idx = newName "i"
-    let acc = newName "acc"
-    let x = newName "x"
-    [
-        cExpr arr vtab
-        sprintf "mov %s, %s" arrVal (placeOf arr)
-        sprintf "mov rdi, %s" arrVal
-        "call length_array"
-        sprintf "mov %s, rax" len
-        sprintf "mov rdi, %s" len
-        "call alloc_array"
-        sprintf "mov %s, rax" outArr
-        cExpr e0 vtab
-        sprintf "mov %s, %s" acc (placeOf e0)
-        sprintf "mov rdi, %s" outArr
-        "mov rsi, 0"
-        sprintf "mov rdx, %s" acc
-        "call write_array"
-        sprintf "mov %s, 1" idx
-        Label (newLabel "scan_loop_start")
-        sprintf "cmp %s, %s" idx len
-        sprintf "jge %s" (newLabel "scan_loop_end")
-        sprintf "mov rdi, %s" arrVal
-        sprintf "mov rsi, %s" idx
-        "call read_array"
-        sprintf "mov %s, rax" x
-        callFunArg farg [acc; x]
-        sprintf "mov %s, rax" acc
-        sprintf "mov rdi, %s" outArr
-        sprintf "mov rsi, %s" idx
-        sprintf "mov rdx, %s" acc
-        "call write_array"
-        sprintf "inc %s" idx
-        sprintf "jmp %s" (newLabel "scan_loop_start")
-        Label (newLabel "scan_loop_end")
-        sprintf "mov %s, %s" (placeOf res) outArr
-    ]
-
+  (* TODO project task 2: see also the comment to replicate.
+     `scan(f, ne, arr)`: you can inspire yourself from the implementation of
+        `reduce`, but in the case of `scan` you will need to also maintain
+        an iterator through the result array, and write the accumulator in
+        the current location of the result iterator at every iteration of
+        the loop.
+  *)
+  | Scan (_, _, _, _, _) ->
+      failwith "Unimplemented code generation of scan"
 
 and applyFunArg ( ff     : TypedFunArg
                 , args   : reg list

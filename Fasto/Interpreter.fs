@@ -1,7 +1,4 @@
-(* An interpreter for Fasto. *)
-
 module Interpreter
-
 (*
 
 An interpreter executes a (Fasto) program by inspecting the abstract syntax
@@ -154,8 +151,8 @@ let rec evalExp (e : UntypedExp, vtab : VarTable, ftab : FunTable) : Value =
   | Negate (e, pos) ->
       let res = evalExp (e, vtab, ftab)
       match res with
-    | IntVal v -> IntVal (-v)
-    | _ -> reportWrongType "operand of ~" Int res (expPos e)
+      | IntVal v -> IntVal (-v)
+      | _ -> reportWrongType "operand of ~" Int res (expPos e)
   | Not (e, pos) ->
       let res = evalExp (e, vtab, ftab)
       match res with
@@ -173,9 +170,17 @@ let rec evalExp (e : UntypedExp, vtab : VarTable, ftab : FunTable) : Value =
     | BoolVal true -> BoolVal true
     | BoolVal false -> evalExp (e2, vtab, ftab)
     | _ -> reportWrongType "left operand of ||" Bool res1 (expPos e1)
-  | BoolConst b -> BoolVal b
 
-
+  (* TODO: project task 1:
+     Look in AbSyn.fs for the arguments of the Times
+     (Divide,...) expression constructors.
+        Implementation similar to the cases of Plus/Minus.
+        Try to pattern match the code above.
+        For Divide, remember to check for attempts to divide by zero.
+        For And/Or: make sure to implement the short-circuit semantics,
+        e.g., And (e1, e2, pos) should not evaluate e2 if e1 already
+              evaluates to false.
+  *)
   | Equal(e1, e2, pos) ->
         let r1 = evalExp(e1, vtab, ftab)
         let r2 = evalExp(e2, vtab, ftab)
@@ -253,39 +258,35 @@ let rec evalExp (e : UntypedExp, vtab : VarTable, ftab : FunTable) : Value =
           | ArrayVal (lst,tp1) ->
                List.fold (fun acc x -> evalFunArg (farg, vtab, ftab, pos, [acc;x])) nel lst
           | otherwise -> reportNonArray "3rd argument of \"reduce\"" arr pos
-  
-  
-  | Replicate (en, ev, _, _) ->
-      let IntVal n = evalExp en vtab ftab
-      let v = evalExp ev vtab ftab
-      if n < 0 then
-            raise (MyError("replicate: negative length", getPos en))
-      else 
-            ArrayVal (Array.create n v)
-      
-  | Filter (farg, arr, _, _) ->
-    let ArrayVal elems = evalExp arr vtab ftab
-    let filterFn = applyFunArg farg vtab ftab
-    let result = elems |> Array.toList |> List.filter (fun v ->
-        match filterFn [v] with
-        | BoolVal true -> true
-        | BoolVal false -> false
-        | _ -> raise (MyError ("filter: expected bool", getPos arr)))
-    ArrayVal (Array.ofList result)
+  (* TODO project task 2: replicate(n, a)
+     Look in AbSyn.fs for the arguments of the Replicate
+     (Map,Scan) expression constructors.
+       - evaluate n then evaluate a,
+       - check that n evaluates to an integer value >= 0
+       - If so then create an array containing n replicas of
+         the value of a; otherwise raise an error (containing
+         a meaningful message).
+  *)
+  | Replicate (_, _, _, _) ->
+        failwith "Unimplemented interpretation of replicate"
 
+  (* TODO project task 2: filter(p, arr)
+       pattern match the implementation of map:
+       - evaluate arr and check that the (value) result corresponds to an array;
+       - use F# List.filter to keep only the elements a of arr which succeed
+         under predicate p, i.e., p(a) = true (but remember to check
+         that the return value is a boolean at all);
+       - create an ArrayVal from the (list) result of the previous step.
+  *)
+  | Filter (_, _, _, _) ->
+        failwith "Unimplemented interpretation of filter"
 
- 
-  | Scan (farg, e0, arr, _, _) ->
-    let ArrayVal elems = evalExp arr vtab ftab
-    let init = evalExp e0 vtab ftab
-    let f = applyFunArg farg vtab ftab
-    let scanResult = 
-        elems |> Array.fold (fun (acc, res) x ->
-            let next = f [acc; x]
-            (next, res @ [next])
-        ) (init, [init]) |> snd
-    ArrayVal (Array.ofList scanResult)
-
+  (* TODO project task 2: scan(f, ne, arr)
+     Implementation similar to reduce, except that it produces an array
+     of the same type and length to the input array arr.
+  *)
+  | Scan (_, _, _, _, _) ->
+        failwith "Unimplemented interpretation of scan"
 
   | Read (t,p) ->
         let str = Console.ReadLine()

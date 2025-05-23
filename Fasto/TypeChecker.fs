@@ -125,47 +125,47 @@ and checkExp  (ftab : FunTable)
         let (e1_dec, e2_dec) = checkBinOp ftab vtab (pos, Int, e1, e2)
         (Int, Minus (e1_dec, e2_dec, pos))
 
-   
+    (* TODO project task 1:
+        Implement by pattern matching Plus/Minus above.
+        See `AbSyn.fs` for the expression constructors of `Times`, ...
+    *)
     | Times (e1, e2, pos) ->
-        let t1 = typExp (e1, vtab, ftab)
-        let t2 = typExp (e2, vtab, ftab)
-        if t1 <> Int then raise (MyError("Left operand of * is not Int", expPos e1));
-        if t2 <> Int then raise (MyError("Right operand of * is not Int", expPos e2));
-        Int
+        let (t1, e1') = checkExp ftab vtab e1
+        let (t2, e2') = checkExp ftab vtab e2
+        if t1 <> Int then reportTypeWrong "left operand of *" Int t1 (expPos e1)
+        if t2 <> Int then reportTypeWrong "right operand of *" Int t2 (expPos e2)
+        (Int, Times (e1', e2', pos))
 
     | Divide (e1, e2, pos) ->
-        let t1 = typExp (e1, vtab, ftab)
-        let t2 = typExp (e2, vtab, ftab)
-        if t1 <> Int then raise (MyError("Left operand of / is not Int", expPos e1));
-        if t2 <> Int then raise (MyError("Right operand of / is not Int", expPos e2));
-        Int
+        let (t1, e1') = checkExp ftab vtab e1
+        let (t2, e2') = checkExp ftab vtab e2
+        if t1 <> Int then reportTypeWrong "left operand of /" Int t1 (expPos e1)
+        if t2 <> Int then reportTypeWrong "right operand of /" Int t2 (expPos e2)
+        (Int, Divide (e1', e2', pos))
 
     | And (e1, e2, pos) ->
-       let t1 = typExp (e1, vtab, ftab)
-       let t2 = typExp (e2, vtab, ftab)
-       if t1 <> Bool then raise (MyError("Left oprand of && is not Bool", expPos e1));
-       if t2 <> Bool then raise (MyError("Right operand of && in not Bool", expPos e2)); 
-       Bool
+        let (t1, e1') = checkExp ftab vtab e1
+        let (t2, e2') = checkExp ftab vtab e2
+        if t1 <> Bool then reportTypeWrong "left operand of &&" Bool t1 (expPos e1)
+        if t2 <> Bool then reportTypeWrong "right operand of &&" Bool t2 (expPos e2)
+        (Bool, And (e1', e2', pos))
 
     | Or (e1, e2, pos) ->
-       let t1 = typExp (e1, vtab, ftab)
-       let t2 = typExp (e2, vtab, ftab)
-       if t1 <> Bool then raise (MyError("Left operand of || is not Bool", expPos e1));
-       if t2 <> Bool then raise (MyError("Right operand of || is not Bool", expPos e2));
-       Bool
-        
+        let (t1, e1') = checkExp ftab vtab e1
+        let (t2, e2') = checkExp ftab vtab e2
+        if t1 <> Bool then reportTypeWrong "left operand of ||" Bool t1 (expPos e1)
+        if t2 <> Bool then reportTypeWrong "right operand of ||" Bool t2 (expPos e2)
+        (Bool, Or (e1', e2', pos))
+
     | Not (e, pos) ->
-       let t = typExp (e, vtab, ftab)
-       if t <> Bool then raise (MyError("Operand of not is not Bool", pos));
-       Bool
+        let (t, e') = checkExp ftab vtab e
+        if t <> Bool then reportTypeWrong "operand of not" Bool t pos
+        (Bool, Not (e', pos))
 
     | Negate (e, pos) ->
-       let t = typExp (e, vtab, ftab)
-       if t <> Int then raise (MyError("Operand of ~ is not Int", pos));
-       Int 
-
-    | BoolConst _ -> Bool
-
+        let (t, e') = checkExp ftab vtab e
+        if t <> Int then reportTypeWrong "operand of ~" Int t pos
+        (Int, Negate (e', pos))
 
     (* The types for e1, e2 must be the same. The result is always a Bool. *)
     | Equal (e1, e2, pos) ->
@@ -302,30 +302,39 @@ and checkExp  (ftab : FunTable)
                                f_argres_type e_type pos
         (f_argres_type, Reduce (f', e_dec, arr_dec, elem_type, pos))
 
-   
-    | Replicate (en, ev, t, pos) ->
-      checkType Int en
-      checkType t ev
-      Array (t, UnknownSize)
+    (* TODO project task 2:
+        See `AbSyn.fs` for the expression constructors of
+        `Replicate`, `Filter`, `Scan`.
 
-    | Filter (farg, arr, t, pos) ->
-      let tArr = checkExp arr
-      match tArr with
-     | Array (tElem, _) ->
-        checkFunArg farg [tElem] Bool
-        Array (tElem, UnknownSize)
-      | _ -> failwith "filter: expected array"
+        Hints for `replicate(n, a)`:
+        - recursively type check `n` and `a`
+        - check that `n` has integer type
+        - assuming `a` is of type `t` the result type
+          of replicate is `[t]`
+    *)
+    | Replicate (_, _, _, _) ->
+        failwith "Unimplemented type check of replicate"
 
-       
-    | Scan (farg e0, arr, t, pos) ->
-      let t0 = checkExp e0
-      let tArr = checkExp arr
-     match tArr with
-     | Array (tElem, _) ->
-        checkFunArg farg [t0; tElem] t0
-        Array (t0, UnknownSize)
-      | _ -> failwith "scan: expected array"
+    (* TODO project task 2: Hint for `filter(f, arr)`
+        Look into the type-checking lecture slides for the type rule of `map`
+        and think of what needs to be changed for filter (?)
+        Use `checkFunArg` to get the signature of the function argument `f`.
+        Check that:
+            - `f` has type `ta -> Bool`
+            - `arr` should be of type `[ta]`
+            - the result of filter should have type `[ta]`
+    *)
+    | Filter (_, _, _, _) ->
+        failwith "Unimplemented type check of filter"
 
+    (* TODO project task 2: `scan(f, ne, arr)`
+        Hint: Implementation is very similar to `reduce(f, ne, arr)`.
+              (The difference between `scan` and `reduce` is that
+              scan's return type is the same as the type of `arr`,
+              while reduce's return type is that of an element of `arr`).
+    *)
+    | Scan (_, _, _, _, _) ->
+        failwith "Unimplemented type check of scan"
 
 and checkFunArg  (ftab : FunTable)
                  (vtab : VarTable)
