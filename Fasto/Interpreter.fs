@@ -136,6 +136,45 @@ let rec evalExp (e : UntypedExp, vtab : VarTable, ftab : FunTable) : Value =
           | (IntVal n1, IntVal n2) -> IntVal (n1-n2)
           | (IntVal _, _) -> reportWrongType "right operand of -" Int res2 (expPos e2)
           | (_, _) -> reportWrongType "left operand of -" Int res1 (expPos e1)
+  | Times(e1, e2, pos) ->
+      let res1 = evalExp (e1, vtab, ftab)
+      let res2 = evalExp (e2, vtab, ftab)
+      match (res1, res2) with
+      | (IntVal n1, IntVal n2) -> IntVal (n1 * n2)
+      | (IntVal _, _) -> reportWrongType "right operand of *" Int res2 (expPos e2)
+      | (_, _) -> reportWrongType "left operandof *" Int res1 (expPos e1)
+  | Divide (e1, e2, pos) ->
+      let res1 = evalExp (e1, vtab, ftab)
+      let res2 = evalExp (e2, vtab, ftab)
+      match (res1, res2) with
+      | (_, IntVal 0) -> raise (MyError("Division by zero", pos))
+      | (IntVal n1, IntVal n2) -> IntVal (n1 / n2)
+      | (IntVal _, _) -> reportWrongType "right operand of /" Int res2 (expPos e2)
+      | (_, _) -> reportWrongType "left operand of /" Int res1 (expPos e1)
+  | Negate (e, pos) ->
+      let res = evalExp (e, vtab, ftab)
+      match res with
+    | IntVal v -> IntVal (-v)
+    | _ -> reportWrongType "operand of ~" Int res (expPos e)
+  | Not (e, pos) ->
+      let res = evalExp (e, vtab, ftab)
+      match res with
+      | BoolVal b -> BoolVal (not b)
+      | _ -> reportWrongType "operand of not" Bool res (expPos e)
+  | And (e1, e2, pos) ->
+      let res1 = evalExp (e1, vtab, ftab)
+      match res1 with
+      | BoolVal false -> BoolVal false
+      | BoolVal true -> evalExp (e2, vtab, ftab)
+      | _ -> reportWrongType "left operand of &&" Bool res1 (expPos e1)
+  | Or (e1, e2, pos) ->
+    let res1 = evalExp (e1, vtab, ftab)
+    match res1 with
+    | BoolVal true -> BoolVal true
+    | BoolVal false -> evalExp (e2, vtab, ftab)
+    | _ -> reportWrongType "left operand of ||" Bool res1 (expPos e1)
+  | BoolConst b -> BoolVal b
+
   (* TODO: project task 1:
      Look in `AbSyn.fs` for the arguments of the `Times`
      (`Divide`,...) expression constructors.

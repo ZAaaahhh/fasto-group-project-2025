@@ -130,22 +130,45 @@ and checkExp  (ftab : FunTable)
         See `AbSyn.fs` for the expression constructors of `Times`, ...
     *)
     | Times (e1, e2, pos) ->
-        failwith "Unimplemented type check of multiplication"
+        let t1 = typExp (e1, vtab, ftab)
+        let t2 = typExp (e2, vtab, ftab)
+        if t1 <> Int then raise (MyError("Left operand of * is not Int", expPos e1));
+        if t2 <> Int then raise (MyError("Right operand of * is not Int", expPos e2));
+        Int
 
-    | Divide (_, _, _) ->
-        failwith "Unimplemented type check of division"
+    | Divide (e1, e2, pos) ->
+        let t1 = typExp (e1, vtab, ftab)
+        let t2 = typExp (e2, vtab, ftab)
+        if t1 <> Int then raise (MyError("Left operand of / is not Int", expPos e1));
+        if t2 <> Int then raise (MyError("Right operand of / is not Int", expPos e2));
+        Int
 
-    | And (_, _, _) ->
-        failwith "Unimplemented type check of &&"
+    | And (e1, e2, pos) ->
+       let t1 = typExp (e1, vtab, ftab)
+       let t2 = typExp (e2, vtab, ftab)
+       if t1 <> Bool then raise (MyError("Left oprand of && is not Bool", expPos e1));
+       if t2 <> Bool then raise (MyError("Right operand of && in not Bool", expPos e2)); 
+       Bool
 
-    | Or (_, _, _) ->
-        failwith "Unimplemented type check of ||"
+    | Or (e1, e2, pos) ->
+       let t1 = typExp (e1, vtab, ftab)
+       let t2 = typExp (e2, vtab, ftab)
+       if t1 <> Bool then raise (MyError("Left operand of || is not Bool", expPos e1));
+       if t2 <> Bool then raise (MyError("Right operand of || is not Bool", expPos e2));
+       Bool
+        
+    | Not (e, pos) ->
+       let t = typExp (e, vtab, ftab)
+       if t <> Bool then raise (MyError("Operand of not is not Bool", pos));
+       Bool
 
-    | Not (_, _) ->
-        failwith "Unimplemented type check of not"
+    | Negate (e, pos) ->
+       let t = typExp (e, vtab, ftab)
+       if t <> Int then raise (MyError("Operand of ~ is not Int", pos));
+       Int 
 
-    | Negate (_, _) ->
-        failwith "Unimplemented type check of negate"
+    | BoolConst _ -> Bool
+
 
     (* The types for e1, e2 must be the same. The result is always a Bool. *)
     | Equal (e1, e2, pos) ->

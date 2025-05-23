@@ -240,17 +240,37 @@ let rec compileExp  (e      : TypedExp)
      version, but remember to come back and clean it up later.
      `Not` and `Negate` are simpler; you can use `XORI` for `Not`
   *)
-  | Times (_, _, _) ->
-      failwith "Unimplemented code generation of multiplication"
+  | Times (e1, e2, pos) ->
+      let (c1, r1) = codeGenExp (e1, vtab, ftab)
+      let (c2, r2) = codeGenExp (e2, vtab, ftab)
+      let dest = newTemp()
+      (c1 @ c2 @ [sprintf "mul %s, %s, %s" dest r1 r2], dest)
 
-  | Divide (_, _, _) ->
-      failwith "Unimplemented code generation of division"
+  | Divide (e1, e2, pos) ->
+      let (c1 r1) = codeGenExp (e1, vtab, ftab)
+      let (c2, r2) = codeGenExp (e2, vtab, ftab)
+      let errLbl = newLabel "dividebyzero"
+      let endLbl = newLabel "divideok"
+      let dest = newTemp ()
+      (c1 @ c2 @ [
+        sprintf "beqz %s, %s" r2 errLbl
+        sprintf "divide %s, %s, %s" dest r1 r2;
+        sprintf "j %s" endLbl;
+        sprintf "%s" errLbl;
+        "li a0, 4"; // fejl kode
+        "j error";
+        sprintf "%s:" endLbl
+      ], dest)
 
-  | Not (_, _) ->
-      failwith "Unimplemented code generation of not"
+  | Not (e, pos) ->
+      let (c, r) = codeGenExp (e, vtab, ftab)
+      let dest = newTemp()
+      (c @ [sprintf "xori %s, %s, 1" dest r], dest)
 
-  | Negate (_, _) ->
-      failwith "Unimplemented code generation of negate"
+  | Negate (e, pos) ->
+      let (c, r) = codeGenExp (e, vtab, ftab)
+      let dest = newTemp()
+      (c @ [sprintf "neg %s, %s" dest r], dest)
 
   | Let (dec, e1, pos) ->
       let (code1, vtable1) = compileDec dec vtable
@@ -341,11 +361,40 @@ let rec compileExp  (e      : TypedExp)
         in `e1 || e2` if the execution of `e1` will evaluate to `true` then
         the code of `e2` must not be executed. Similarly for `And` (&&).
   *)
-  | And (_, _, _) ->
-      failwith "Unimplemented code generation of &&"
+  | And (e1, e2, pos) ->
+      let (c1, r1) = codeGenExp (e1, vtab, ftab)
+      let (c2, r2) = codeGenExp (e2, vtab, ftab)
+      let dest = newTemp()
+      let lblFalse = newLabel "and_false"
+      let lblEnd = newLabel "and_end"
+      (c1 @ [
+          sprintf "beqz %s, %s" r1 lblFalse 
+      ] @ c2 @ [
+          sprintf "and %s, %s, %s" dest r1 r2;
+          sprintf "j %s" lblEnd;
+          sprintf "%s:" lblFalse;
+          sprintf "li %s, 0" dest;
+          sprintf "%s" lblEnd
+      ], dest)
 
-  | Or (_, _, _) ->
-      failwith "Unimplemented code generation of ||"
+  | Or (e1, e2, pos) ->
+      let (c1, r1) = codeGenExp (e1, vtab, ftab)
+      let (c2, r2) = codeGenExp (e2, vtab, ftab)
+      let dest = newTemp()
+      let lblTrue = newLabel "or_true"
+      let lblEnd = newLabel "or_end"
+      (c1 @  [
+          sprintf "bnez %s, %s" r1 lblTrue
+      ] @ c2 @ [
+          sprintf "or %s, %s, %s" dest r1 r2;
+          sprintf "j %s" lblEnd;
+          sprintf "%s:" lblTrue;
+          sprintf "li %s, 1" dest;
+          sprintf "%s:" lblEnd
+      ], dest)
+
+  | BoolConst true -> ([], "1")
+  | BoolConst false -> ([], "0")
 
   (* Indexing:
      1. generate code to compute the index
